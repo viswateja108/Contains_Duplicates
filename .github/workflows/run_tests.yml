@@ -1,126 +1,88 @@
-name: Run Language-Specific Tests
+name: Run Code Tests
 
 on:
   push:
-    branches:
-      - main
+    paths:
+      - "solutions/"
   pull_request:
+    paths:
+      - "tests/"
 
 jobs:
-  detect-changes:
+  run-tests:
     runs-on: ubuntu-latest
-    outputs:
-      run_python: ${{ steps.filter.outputs.python_changed }}
-      run_cpp: ${{ steps.filter.outputs.cpp_changed }}
-      run_c: ${{ steps.filter.outputs.c_changed }}
-      run_java: ${{ steps.filter.outputs.java_changed }}
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Detect Modified Files
-        id: filter
-        run: |
-          git fetch origin main --depth=1 || true
-
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
-            CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
-          else
-            CHANGED_FILES=$(git ls-files)  # First commit case
-          fi
-
-          echo "Changed files: $CHANGED_FILES"
-
-          if echo "$CHANGED_FILES" | grep -qE 'solutions/solution.py|tests/test_python.py'; then
-            echo "python_changed=true" >> $GITHUB_ENV
-          fi
-
-          if echo "$CHANGED_FILES" | grep -qE 'solutions/.*\.cpp|tests/test_cpp.cpp'; then
-            echo "cpp_changed=true" >> $GITHUB_ENV
-          fi
-
-          if echo "$CHANGED_FILES" | grep -qE 'solutions/.*\.c|tests/test_c.c'; then
-            echo "c_changed=true" >> $GITHUB_ENV
-          fi
-
-          if echo "$CHANGED_FILES" | grep -qE 'solutions/Main.java|tests/MainTest.java'; then
-            echo "java_changed=true" >> $GITHUB_ENV
-          fi
-
-  test-python:
-    needs: detect-changes
-    if: env.python_changed == 'true'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set Up Python
-        uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          fetch-depth: 2  # Ensure previous commit is available
 
       - name: Install Dependencies
-        run: pip install pytest
-
-      - name: Run Python Tests
         run: |
-          if [ -f "tests/test_python.py" ]; then
-            pytest tests/test_python.py
-          else
-            echo "No Python test file found. Skipping."
+          sudo apt update
+          sudo apt install -y gcc g++ openjdk-17-jdk python3
+
+      - name: Detect Changed Files
+        id: changed-files
+        run: |
+          BEFORE_COMMIT="${{ github.event.before }}"
+          if [ -z "$BEFORE_COMMIT" ] || ! git cat-file -e "$BEFORE_COMMIT"^{commit}; then
+            BEFORE_COMMIT=$(git rev-parse HEAD~1)  # Use last commit as fallback
+          fi
+          
+          CHANGED_FILES=$(git diff --name-only "$BEFORE_COMMIT" HEAD)
+          echo "Detected changed files: $CHANGED_FILES"
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No file changes detected. Exiting..."
+            exit 1
           fi
 
-  test-cpp:
-    needs: detect-changes
-    if: env.cpp_changed == 'true'
-    runs-on: ubuntu-latest
+          echo "CHANGED_FILES=$CHANGED_FILES" >> $GITHUB_ENV
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Compile and Run C++ Tests
+      - name: Determine File Type
+        id: determine-file
         run: |
-          if [ -f "tests/test_cpp.cpp" ]; then
-            g++ -o cpp_test tests/test_cpp.cpp solutions/*.cpp && ./cpp_test
+          if echo "$CHANGED_FILES" | grep -qE '\.c$'; then
+            echo "language=C" >> $GITHUB_ENV
+          elif echo "$CHANGED_FILES" | grep -qE '\.cpp$'; then
+            echo "language=C++" >> $GITHUB_ENV
+          elif echo "$CHANGED_FILES" | grep -qE '\.py$'; then
+            echo "language=Python" >> $GITHUB_ENV
+          elif echo "$CHANGED_FILES" | grep -qE '\.java$'; then
+            echo "language=Java" >> $GITHUB_ENV
           else
-            echo "No C++ test file found. Skipping."
+            echo "No relevant file changes detected. Exiting..."
+            exit 1
           fi
 
-  test-c:
-    needs: detect-changes
-    if: env.c_changed == 'true'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Compile and Run C Tests
+      - name: Compile and Run C Program
+        if: ${{ env.language == 'C' }}
         run: |
-          if [ -f "tests/test_c.c" ]; then
-            gcc -o c_test tests/test_c.c solutions/*.c && ./c_test
-          else
-            echo "No C test file found. Skipping."
-          fi
+          gcc tests/test.c -o solution_c
+          ./solution_c
 
-  test-java:
-    needs: detect-changes
-    if: env.java_changed == 'true'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Compile and Run Java Tests
+      - name: Compile and Run C++ Program
+        if: ${{ env.language == 'C++' }}
         run: |
-          if [ -f "tests/MainTest.java" ]; then
-            javac -d . solutions/Main.java tests/MainTest.java
-            java tests.MainTest
-          else
-            echo "No Java test file found. Skipping."
+          g++ -I. tests/test.cpp solutions/*.cpp -o solution_cpp
+          ./solution_cpp
+
+      - name: Run Python Program
+        if: ${{ env.language == 'Python' }}
+        run: |
+          PYTHON_FILE=$(ls solutions/*.py 2>/dev/null | head -n 1)
+
+          if [ -z "$PYTHON_FILE" ]; then
+            echo "Error: No Python script found in solutions/ directory!"
+            exit 1
           fi
+          
+          echo "Executing Python script: $PYTHON_FILE"
+          # python3 "$PYTHON_FILE" < tests/test.py
+          python -m tests.test
+      - name: Compile and Run Java Program
+        if: ${{ env.language == 'Java' }}
+        run: |
+          javac -d . solutions/.java tests/.java  # Compile all Java files
+          java -cp . tests.Test  # Ensure correct package path

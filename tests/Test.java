@@ -1,14 +1,14 @@
 package tests; // ✅ Define package name
 
-import solutions.Main; // ✅ Import the Main class
+import solutions.Solution; // ✅ Import the Main class
 
-public class MainTest {
+public class Test {
     private static int passed = 0;
     private static int total = 0;
 
     public static void runTestCase(int[] input, boolean expected) {
         total++;
-        boolean actual = Main.containsDuplicate(input);
+        boolean actual = Solution.containsDuplicate(input);
 
         if (actual == expected) {
             passed++;
