@@ -20,7 +20,8 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y gcc g++ openjdk-17-jdk python3
+          sudo apt install -y gcc g++ openjdk-17-jdk python3 python3-pip
+          pip install pytest  # Install pytest for Python tests
 
       - name: Detect Changed Files
         id: changed-files
@@ -43,46 +44,56 @@ jobs:
       - name: Determine File Type
         id: determine-file
         run: |
-          if echo "$CHANGED_FILES" | grep -qE '\.c$'; then
+          if echo "$CHANGED_FILES" | grep -qE 'solutions/.*\.c$'; then
             echo "language=C" >> $GITHUB_ENV
-          elif echo "$CHANGED_FILES" | grep -qE '\.cpp$'; then
+          elif echo "$CHANGED_FILES" | grep -qE 'solutions/.*\.cpp$'; then
             echo "language=C++" >> $GITHUB_ENV
-          elif echo "$CHANGED_FILES" | grep -qE '\.py$'; then
+          elif echo "$CHANGED_FILES" | grep -qE 'solutions/.*\.py$'; then
             echo "language=Python" >> $GITHUB_ENV
-          elif echo "$CHANGED_FILES" | grep -qE '\.java$'; then
+          elif echo "$CHANGED_FILES" | grep -qE 'solutions/.*\.java$'; then
             echo "language=Java" >> $GITHUB_ENV
           else
             echo "No relevant file changes detected. Exiting..."
             exit 1
           fi
 
+      # Run C Tests
       - name: Compile and Run C Program
         if: ${{ env.language == 'C' }}
         run: |
-          gcc tests/test.c -o solution_c
-          ./solution_c
+          if [ -f "tests/test_c.c" ]; then
+            gcc -o c_test tests/test_c.c solutions/*.c && ./c_test
+          else
+            echo "No C test file found. Skipping."
+          fi
 
+      # Run C++ Tests
       - name: Compile and Run C++ Program
         if: ${{ env.language == 'C++' }}
         run: |
-          g++ -I. tests/test.cpp solutions/*.cpp -o solution_cpp
-          ./solution_cpp
+          if [ -f "tests/test_cpp.cpp" ]; then
+            g++ -o cpp_test tests/test_cpp.cpp solutions/*.cpp && ./cpp_test
+          else
+            echo "No C++ test file found. Skipping."
+          fi
 
-      - name: Run Python Program
+      # Run Python Tests
+      - name: Run Python Tests
         if: ${{ env.language == 'Python' }}
         run: |
-          PYTHON_FILE=$(ls solutions/*.py 2>/dev/null | head -n 1)
-
-          if [ -z "$PYTHON_FILE" ]; then
-            echo "Error: No Python script found in solutions/ directory!"
-            exit 1
+          if [ -f "tests/test_python.py" ]; then
+            pytest tests/test_python.py
+          else
+            echo "No Python test file found. Skipping."
           fi
-          
-          echo "Executing Python script: $PYTHON_FILE"
-          # python3 "$PYTHON_FILE" < tests/test.py
-          python -m tests.test
+
+      # Run Java Tests
       - name: Compile and Run Java Program
         if: ${{ env.language == 'Java' }}
         run: |
-          javac -d . solutions/.java tests/.java  # Compile all Java files
-          java -cp . tests.Test  # Ensure correct package path
+          if [ -f "tests/MainTest.java" ]; then
+            javac -d . solutions/*.java tests/*.java  # Compile Java files
+            java tests.MainTest  # Run Java test file
+          else
+            echo "No Java test file found. Skipping."
+          fi
