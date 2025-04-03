@@ -1,4 +1,4 @@
-name: Run Tests
+name: Conditional Test Runner
 
 on:
   push:
@@ -7,9 +7,50 @@ on:
   pull_request:
 
 jobs:
-  test:
+  detect-changes:
     runs-on: ubuntu-latest
+    outputs:
+      run_python: ${{ steps.filter.outputs.python_changed }}
+      run_cpp: ${{ steps.filter.outputs.cpp_changed }}
+      run_c: ${{ steps.filter.outputs.c_changed }}
+      run_java: ${{ steps.filter.outputs.java_changed }}
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
+      - name: Detect Modified Files
+        id: filter
+        run: |
+          git fetch origin main --depth=1
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
+
+          echo "Changed files: $CHANGED_FILES"
+
+          if echo "$CHANGED_FILES" | grep -qE 'solutions/solution.py|tests/test_python.py'; then
+            echo "Python files changed"
+            echo "python_changed=true" >> $GITHUB_ENV
+          fi
+
+          if echo "$CHANGED_FILES" | grep -qE 'solutions/.*\.cpp|tests/test_cpp.cpp'; then
+            echo "C++ files changed"
+            echo "cpp_changed=true" >> $GITHUB_ENV
+          fi
+
+          if echo "$CHANGED_FILES" | grep -qE 'solutions/.*\.c|tests/test_c.c'; then
+            echo "C files changed"
+            echo "c_changed=true" >> $GITHUB_ENV
+          fi
+
+          if echo "$CHANGED_FILES" | grep -qE 'solutions/Main.java|tests/MainTest.java'; then
+            echo "Java files changed"
+            echo "java_changed=true" >> $GITHUB_ENV
+          fi
+
+  python-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.run_python == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -23,38 +64,39 @@ jobs:
         run: pip install pytest
 
       - name: Run Python Tests
-        if: hashFiles('solutions/solution.py', 'tests/test_python.py') != ''
-        run: |
-          if [ -f "tests/test_python.py" ]; then
-            pytest tests/test_python.py
-          else
-            echo "No Python test file found. Skipping."
-          fi
+        run: pytest tests/test_python.py
+
+  cpp-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.run_cpp == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Compile and Run C++ Tests
-        if: hashFiles('solutions/*.cpp', 'tests/test_cpp.cpp') != ''
-        run: |
-          if [ -f "tests/test_cpp.cpp" ]; then
-            g++ -o cpp_test tests/test_cpp.cpp solutions/*.cpp && ./cpp_test
-          else
-            echo "No C++ test file found. Skipping."
-          fi
+        run: g++ -o cpp_test tests/test_cpp.cpp solutions/*.cpp && ./cpp_test
+
+  c-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.run_c == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Compile and Run C Tests
-        if: hashFiles('solutions/*.c', 'tests/test_c.c') != ''
-        run: |
-          if [ -f "tests/test_c.c" ]; then
-            gcc -o c_test tests/test_c.c solutions/*.c && ./c_test
-          else
-            echo "No C test file found. Skipping."
-          fi
+        run: gcc -o c_test tests/test_c.c solutions/*.c && ./c_test
+
+  java-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.run_java == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Compile and Run Java Tests
-        if: hashFiles('solutions/Main.java', 'tests/MainTest.java') != ''
         run: |
-          if [ -f "tests/MainTest.java" ]; then
-            javac -d . solutions/Main.java tests/MainTest.java
-            java tests.MainTest
-          else
-            echo "No Java test file found. Skipping."
-          fi
+          javac -d . solutions/Main.java tests/MainTest.java
+          java tests.MainTest
