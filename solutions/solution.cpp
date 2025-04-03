@@ -10,6 +10,7 @@ public:
         for (int num : nums) {
             if (s.find(num) != s.end()) return true;
             s.insert(num);
+            
         }
         return false;
     }
