@@ -8,6 +8,7 @@ public class Solution {
         for (int num : nums) {
             if (set.contains(num)) {
                 return true; // Duplicate found
+                
             }
             set.add(num);
         }
