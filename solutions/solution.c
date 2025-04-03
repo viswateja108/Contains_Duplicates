@@ -7,7 +7,7 @@ int compare(const void *a, const void *b) {
     return (*(int *)a - *(int *)b);
 }
 
-// Function to check if an array contains duplicates
+// Function to check if an array contains duplicates.
 bool containsDuplicate(int *nums, int numsSize) {
     if (numsSize <= 1) return false;
 
