@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// Comparator function for sorting
+// Comparator function for sorting.
 int compare(const void *a, const void *b) {
     return (*(int *)a - *(int *)b);
 }
