@@ -1,0 +1,110 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_python: ${{ steps.filter.outputs.python }}
+      run_cpp: ${{ steps.filter.outputs.cpp }}
+      run_c: ${{ steps.filter.outputs.c }}
+      run_java: ${{ steps.filter.outputs.java }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Detect Changes
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            python:
+              - 'solutions/*.py'
+              - 'tests/test_python.py'
+            cpp:
+              - 'solutions/*.cpp'
+              - 'tests/test_cpp.cpp'
+            c:
+              - 'solutions/*.c'
+              - 'tests/test_c.c'
+            java:
+              - 'solutions/*.java'
+              - 'tests/*.java'
+
+  python-tests:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.run_python == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: pip install pytest
+
+      - name: Run Python Tests
+        run: pytest tests/test_python.py
+
+  cpp-tests:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.run_cpp == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install C++ Compiler
+        run: sudo apt-get install -y g++
+
+      - name: Compile and Run C++ Tests
+        run: |
+          g++ -o cpp_test tests/test_cpp.cpp solutions/*.cpp
+          ./cpp_test
+
+  c-tests:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.run_c == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install C Compiler
+        run: sudo apt-get install -y gcc
+
+      - name: Compile and Run C Tests
+        run: |
+          gcc -o c_test tests/test_c.c solutions/*.c
+          ./c_test
+
+  java-tests:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.run_java == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Compile Java Code
+        run: javac -d . solutions/*.java tests/*.java
+
+      - name: Run Java Tests
+        run: java tests.MainTest
