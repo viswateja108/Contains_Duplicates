@@ -20,6 +20,5 @@ bool containsDuplicate(int *nums, int numsSize) {
             return true;
         }
     }
-
     return false;
 }
